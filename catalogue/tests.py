@@ -6,7 +6,10 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import MedicationSKU
+from django.contrib.auth.models import User
 
+
+# Test SKUs
 class MedicationSKUTests(APITestCase):
     def setUp(self):
         self.sku = MedicationSKU.objects.create(
@@ -93,3 +96,59 @@ class MedicationSKUTests(APITestCase):
         }
         response = self.client.post(self.list_url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+# Test User Login
+class AuthenticationTests(APITestCase):
+
+    def setUp(self):
+        self.register_url = reverse('register')
+        self.login_url = reverse('token_obtain_pair')
+        self.user_data = {
+            "username": "testuser",
+            "password": "testpassword123",
+            "email": "test@example.com",
+            "first_name": "Test",
+            "last_name": "User"
+        }
+
+    def test_register_user(self):
+        response = self.client.post(self.register_url, data=self.user_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(User.objects.get().username, "testuser")
+
+    def test_obtain_jwt_token(self):
+        # Primero, registrar el usuario
+        self.client.post(self.register_url, data=self.user_data, format='json')
+        # Intentar obtener el token
+        response = self.client.post(self.login_url, data={
+            "username": "testuser",
+            "password": "testpassword123"
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+
+    def test_access_protected_route_without_token(self):
+        # Intentar acceder a una ruta protegida sin token
+        response = self.client.post(reverse('sku-list'), data={}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_access_protected_route_with_token(self):
+        # Registrar y obtener token
+        self.client.post(self.register_url, data=self.user_data, format='json')
+        token_response = self.client.post(self.login_url, data={
+            "username": "testuser",
+            "password": "testpassword123"
+        }, format='json')
+        access_token = token_response.data['access']
+        # Acceder a una ruta protegida con token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        response = self.client.post(reverse('sku-list'), data={
+            "medication_name": "Amoxicillin",
+            "presentation": "Tablet",
+            "dose": "50",
+            "unit": "mg"
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

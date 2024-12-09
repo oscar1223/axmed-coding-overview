@@ -1,0 +1,32 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: gunicorn axmed_project.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://axmed_user:axmed_pass@db:5432/axmed_db
+      - SECRET_KEY=tu_clave_secreta
+      - DEBUG=False
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: axmed_db
+      POSTGRES_USER: axmed_user
+      POSTGRES_PASSWORD: axmed_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+
+volumes:
+  postgres_data:
